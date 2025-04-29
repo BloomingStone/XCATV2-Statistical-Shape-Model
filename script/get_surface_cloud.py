@@ -18,6 +18,31 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
+def get_cloud_from_nii_label(label_nii_path: Path, max_point_num = 1000, direction = (-1, 1, 1)):
+    """从NII文件中提取点云"""
+    label_nii = nib.load(str(label_nii_path))
+    label_data = label_nii.get_fdata()
+    direction_label = np.diag(label_nii.affine[:3, :3])
+    for i in range(3):
+        if direction[i] * direction_label[i] < 0:
+            label_data = np.flip(label_data, axis=i)
+    
+    label_ids = sorted(np.unique(label_data).astype(np.int8))[1:]
+    surface_all = pv.PolyData()
+    
+    for label_id in label_ids:
+        assert label_id > 0
+        surface = pv.wrap((label_data == label_id).astype(np.uint8)).contour([1], method="flying_edges").triangulate().smooth_taubin()
+        if np.isnan(surface.points).any():
+            raise ValueError(f"NaN in points")
+        if surface.n_points > max_point_num:
+            surface = pv.PolyData(surface.points[np.random.choice(surface.n_points, max_point_num, replace=False)])
+        else:
+            surface = pv.PolyData(surface.points)
+        surface.point_data["label"] = np.ones(surface.n_points).astype(np.uint8) * label_id
+        surface_all = surface_all.merge(surface)
+    return surface_all
+
 def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 1000):
     """处理单个label文件并保存VTK结果"""
     try:
@@ -26,23 +51,7 @@ def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 1000
         vtk_file = vtk_dir / ssm_case_name / f"{label_name}.vtk"
         vtk_file.parent.mkdir(parents=True, exist_ok=True)
         
-        label_nii = nib.load(str(label_nii_path))
-        label_data = label_nii.get_fdata()
-        label_ids = sorted(np.unique(label_data).astype(np.int8))[1:]
-        surface_all = pv.PolyData()
-        
-        for label_id in label_ids:
-            assert label_id > 0
-            surface = pv.wrap((label_data == label_id).astype(np.uint8)).contour([1], method="flying_edges").triangulate().smooth_taubin()
-            if np.isnan(surface.points).any():
-                raise ValueError(f"NaN in points, vtk_file: {vtk_file}")
-            if surface.n_points > max_point_num:
-                surface = pv.PolyData(surface.points[np.random.choice(surface.n_points, max_point_num, replace=False)])
-            else:
-                surface = pv.PolyData(surface.points)
-            surface.point_data["label"] = np.ones(surface.n_points).astype(np.uint8) * label_id
-            surface_all = surface_all.merge(surface)
-        
+        surface_all = get_cloud_from_nii_label(label_nii_path, max_point_num)
         surface_all.save(str(vtk_file))
         return True
     except Exception as e:

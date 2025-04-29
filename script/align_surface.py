@@ -28,7 +28,7 @@ def align_surface_rigid(moving_surface: pv.PolyData, moving_point_cloud: pv.Poly
     res.points = reg.transform_point_cloud(torch.tensor(moving_surface.points, device='cuda', dtype=torch.float64)).cpu().numpy()
     return res
 
-def deform_surface(source_surface: pv.PolyData, target_surface: pv.PolyData) -> pv.PolyData:
+def deform_surface(source_surface: pv.PolyData, target_surface: pv.PolyData, **deform_kwargs) -> pv.PolyData:
     moving_labels = source_surface.point_data["label"]
     fix_labels = target_surface.point_data["label"]
     res = pv.PolyData()
@@ -39,7 +39,7 @@ def deform_surface(source_surface: pv.PolyData, target_surface: pv.PolyData) -> 
         target_points = target_surface.points[fix_labels == label]
         new_points, _ = torchcpd.RigidRegistration(X=target_points, Y=source_points, device='cuda').register()
         new_points, _ = torchcpd.AffineRegistration(X=target_points, Y=new_points.cpu().numpy(), device='cuda').register()
-        new_points, _ = torchcpd.DeformableRegistration(X=target_points, Y=new_points.cpu().numpy(), device='cuda').register()
+        new_points, _ = torchcpd.DeformableRegistration(X=target_points, Y=new_points.cpu().numpy(), device='cuda', kwargs=deform_kwargs).register()
         cloud = pv.PolyData(new_points.cpu().numpy())
         cloud.point_data["label"] = np.ones(cloud.n_points).astype(np.uint8) * label
         res = res.merge(cloud)
