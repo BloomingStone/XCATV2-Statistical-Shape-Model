@@ -13,6 +13,7 @@
 *.nii.gz
 *.vtk
 *.log
+*.npy
 
 
 dxcat2

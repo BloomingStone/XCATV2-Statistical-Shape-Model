@@ -1,4 +1,3 @@
-# %%
 from pathlib import Path
 import multiprocessing
 from functools import partial
@@ -11,12 +10,6 @@ import nibabel as nib
 import numpy as np
 
 
-ssm_nii_dir = Path.cwd() / "output_ssm_nii"
-vtk_dir = Path.cwd() / "output_ssm_vtk"
-
-max_point_num = 1000
-
-# %%
 # 配置日志记录
 logging.basicConfig(
     filename='processing_errors.log',
@@ -25,7 +18,7 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
-def process_label_file(label_nii_path: Path, vtk_dir: Path):
+def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 1000):
     """处理单个label文件并保存VTK结果"""
     try:
         ssm_case_name = label_nii_path.parent.parent.name
@@ -44,7 +37,7 @@ def process_label_file(label_nii_path: Path, vtk_dir: Path):
             if np.isnan(surface.points).any():
                 raise ValueError(f"NaN in points, vtk_file: {vtk_file}")
             if surface.n_points > max_point_num:
-                surface = pv.PolyData(np.random.choice(surface.points, max_point_num, replace=False))
+                surface = pv.PolyData(surface.points[np.random.choice(surface.n_points, max_point_num, replace=False)])
             else:
                 surface = pv.PolyData(surface.points)
             surface.point_data["label"] = np.ones(surface.n_points).astype(np.uint8) * label_id
@@ -58,7 +51,7 @@ def process_label_file(label_nii_path: Path, vtk_dir: Path):
         print(f"ERROR: {error_msg} - see processing_errors.log for details")
         return False
 
-def main_multiprocess():
+def main_multi_process(ssm_nii_dir: Path, vtk_dir: Path):
     # 收集所有需要处理的label文件路径
     label_files = []
     for ssm_case in ssm_nii_dir.iterdir():
@@ -87,7 +80,7 @@ def main_multiprocess():
         success_count = sum(results)
         print(f"\nProcessing complete! Success: {success_count}/{len(label_files)}")
 
-def main_singleprocess():
+def main_single_process(ssm_nii_dir: Path, vtk_dir: Path):
     # 收集所有需要处理的label文件路径
     for ssm_case in ssm_nii_dir.iterdir():
         if not ssm_case.is_dir():
@@ -99,4 +92,7 @@ def main_singleprocess():
                 vtk_dir=vtk_dir
             )
 
-main_multiprocess()
+if __name__ == "__main__":
+    ssm_nii_dir = Path.cwd() / "output_ssm_nii"
+    vtk_dir = Path.cwd() / "output_ssm_vtk"
+    main_multi_process(ssm_nii_dir=ssm_nii_dir, vtk_dir=vtk_dir)
