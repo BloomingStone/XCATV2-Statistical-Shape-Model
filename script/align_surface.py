@@ -31,9 +31,9 @@ def align_surface_rigid(moving_surface: pv.PolyData, moving_point_cloud: pv.Poly
 def deform_surface(source_surface: pv.PolyData, target_surface: pv.PolyData, **deform_kwargs) -> pv.PolyData:
     moving_labels = source_surface.point_data["label"]
     fix_labels = target_surface.point_data["label"]
-    res = pv.PolyData()
     labels = np.unique(moving_labels)
     labels = labels[labels != 0]
+    new_cloud = pv.PolyData()
     for label in labels:
         source_points = source_surface.points[moving_labels == label]
         target_points = target_surface.points[fix_labels == label]
@@ -42,8 +42,10 @@ def deform_surface(source_surface: pv.PolyData, target_surface: pv.PolyData, **d
         new_points, _ = torchcpd.DeformableRegistration(X=target_points, Y=new_points.cpu().numpy(), device='cuda', kwargs=deform_kwargs).register()
         cloud = pv.PolyData(new_points.cpu().numpy())
         cloud.point_data["label"] = np.ones(cloud.n_points).astype(np.uint8) * label
-        res = res.merge(cloud)
+        new_cloud = new_cloud.merge(cloud)
     
+    res = source_surface.copy()
+    res.points = new_cloud.points
     return res
 
 def main():
@@ -70,16 +72,16 @@ def main():
         new_fix_vtk_file = aligned_vtk_dir / fix_vtk_file.relative_to(vtk_dir)
         new_fix_vtk_file.parent.mkdir(parents=True, exist_ok=True)
         fix_surface.save(new_fix_vtk_file)
-        fix_point_cloud = pv.read(volume_points_cloud_dir / fix_vtk_file.relative_to(vtk_dir))
+        fix_volume_point_cloud = pv.read(volume_points_cloud_dir / fix_vtk_file.relative_to(vtk_dir))
         for case_name, case_files in tqdm(surface_vtk_files.items(), desc="Processing cases"):
             mov_vtk_file = case_files[phase]
             mov_surface = pv.read(mov_vtk_file)
-            mov_point_cloud = pv.read(volume_points_cloud_dir / mov_vtk_file.relative_to(vtk_dir))
+            mov_volume_point_cloud = pv.read(volume_points_cloud_dir / mov_vtk_file.relative_to(vtk_dir))
             try:
                 mov_surface = align_surface_rigid(
                     moving_surface=mov_surface,
-                    moving_point_cloud=mov_point_cloud,
-                    fixed_point_cloud=fix_point_cloud
+                    moving_point_cloud=mov_volume_point_cloud,
+                    fixed_point_cloud=fix_volume_point_cloud
                 )
 
                 mov_surface = deform_surface(
