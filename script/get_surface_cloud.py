@@ -6,9 +6,19 @@ import logging
 from tqdm import tqdm
 
 import pyvista as pv
+import pyacvd
 import nibabel as nib
 import numpy as np
+from scipy.ndimage import binary_closing, binary_opening
+from scipy import ndimage
 
+def get_largest_connected_component(data: np.ndarray) -> np.ndarray:
+    """获取二值图像中最大的连通区域"""
+    structure = ndimage.generate_binary_structure(3, 1)
+    labeled_data, num_features = ndimage.label(data, structure=structure)
+    sizes = ndimage.sum(data, labeled_data, range(num_features + 1))
+    largest_component = sizes.argmax()
+    return (labeled_data == largest_component).astype(np.uint8)
 
 # 配置日志记录
 logging.basicConfig(
@@ -18,7 +28,7 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
-def get_cloud_from_nii_label(label_nii_path: Path, max_point_num = 1000, direction = (-1, 1, 1)):
+def get_cloud_from_nii_label(label_nii_path: Path, max_point_num, direction = (-1, 1, 1)):
     """从NII文件中提取点云"""
     label_nii = nib.load(str(label_nii_path))
     label_data = label_nii.get_fdata()
@@ -32,18 +42,34 @@ def get_cloud_from_nii_label(label_nii_path: Path, max_point_num = 1000, directi
     
     for label_id in label_ids:
         assert label_id > 0
-        surface = pv.wrap((label_data == label_id).astype(np.uint8)).contour([1], method="flying_edges").triangulate().smooth_taubin()
+        if label_id == 1:
+            # 左室心肌部分，和左室腔部分合并
+            mask_1 = (label_data == 1).astype(np.uint8)
+            mask_2 = (label_data == 2).astype(np.uint8)
+            mask = mask_1 + mask_2
+            mask = (mask > 0).astype(np.uint8)
+        else:
+            mask = (label_data == label_id).astype(np.uint8)
+        
+        structure = ndimage.generate_binary_structure(3, 1)
+        mask = get_largest_connected_component(mask)
+        mask = binary_closing(mask, iterations=1, structure=structure)
+        mask = binary_opening(mask, iterations=1, structure=structure)
+
+        surface = pv.wrap(mask).contour([1], method="flying_edges").triangulate().smooth_taubin(n_iter=50).clean()
+        cluster = pyacvd.Clustering(surface)
+        cluster.subdivide(2)
+        cluster.cluster(max_point_num)
+        surface = cluster.create_mesh().triangulate().clean()
         if np.isnan(surface.points).any():
             raise ValueError(f"NaN in points")
-        if surface.n_points > max_point_num:
-            surface = pv.PolyData(surface.points[np.random.choice(surface.n_points, max_point_num, replace=False)])
-        else:
-            surface = pv.PolyData(surface.points)
+        if not surface.is_manifold:
+            raise ValueError(f"Mesh is not manifold")
         surface.point_data["label"] = np.ones(surface.n_points).astype(np.uint8) * label_id
         surface_all = surface_all.merge(surface)
     return surface_all
 
-def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 1000):
+def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 2000):
     """处理单个label文件并保存VTK结果"""
     try:
         ssm_case_name = label_nii_path.parent.parent.name
@@ -91,11 +117,11 @@ def main_multi_process(ssm_nii_dir: Path, vtk_dir: Path):
 
 def main_single_process(ssm_nii_dir: Path, vtk_dir: Path):
     # 收集所有需要处理的label文件路径
-    for ssm_case in ssm_nii_dir.iterdir():
+    for ssm_case in tqdm(ssm_nii_dir.iterdir()):
         if not ssm_case.is_dir():
             continue
         label_dir = ssm_case / "label"
-        for label_nii_path in label_dir.glob("*.nii.gz"):
+        for label_nii_path in tqdm(label_dir.glob("*.nii.gz")):
             process_label_file(
                 label_nii_path=label_dir / label_nii_path.name,
                 vtk_dir=vtk_dir
@@ -105,3 +131,4 @@ if __name__ == "__main__":
     ssm_nii_dir = Path.cwd() / "output_ssm_nii"
     vtk_dir = Path.cwd() / "output_ssm_vtk"
     main_multi_process(ssm_nii_dir=ssm_nii_dir, vtk_dir=vtk_dir)
+    # main_single_process(ssm_nii_dir=ssm_nii_dir, vtk_dir=vtk_dir)
