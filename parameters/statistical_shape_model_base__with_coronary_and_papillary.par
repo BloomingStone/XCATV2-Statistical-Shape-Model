@@ -48,10 +48,10 @@ hrt_motion_rot_xz = 0.0		#hrt_motion_rot_xz (extent in degrees of the heart's xz
 hrt_motion_rot_yx = 0.0		#hrt_motion_rot_yx (extent in degrees of the heart's yx rotation during breathing; default = 0.0 ) SEE NOTE 4 and NOTE 8
 hrt_motion_rot_zy = 0.0		#hrt_motion_rot_zy (extent in degrees of the heart's zy rotation during breathing; default = 0.0 ) SEE NOTE 4 and NOTE 8
 
-vessel_flag = 0			# vessel_flag (1 = include arteries and veins, 0 = do not include) 
-coronary_art_flag = 0           # coronary artery flag (1 = include coronary arteries, 0 = do not include)
-coronary_vein_flag = 0           # coronary vein flag (1 = include coroanry veins, 0 = do not include)
-papillary_flag = 0		# papillary_flag (1 = include papillary muscles in heart, 0 = do not include)
+vessel_flag = 1			# vessel_flag (1 = include arteries and veins, 0 = do not include) 
+coronary_art_flag = 1           # coronary artery flag (1 = include coronary arteries, 0 = do not include)
+coronary_vein_flag = 1           # coronary vein flag (1 = include coroanry veins, 0 = do not include)
+papillary_flag = 1		# papillary_flag (1 = include papillary muscles in heart, 0 = do not include)
 
 arms_flag = 1		# arms_flag (0 = no arms, 1 = arms at the side)
 gender = 0		# male or female phantom (0 = male, 1 = female), be sure to adjust below accordingly

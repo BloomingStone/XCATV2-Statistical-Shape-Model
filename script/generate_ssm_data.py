@@ -4,6 +4,7 @@ import re
 from tempfile import TemporaryDirectory
 from multiprocessing import Pool
 from datetime import datetime
+import os
 
 import numpy as np
 import nibabel as nib
@@ -121,6 +122,7 @@ def main():
     output_prefix = "ssm"
 
     param_file = phantom_root_dir / "parameters" / "statistical_shape_model_base.par"
+    # param_file = phantom_root_dir / "parameters" / "statistical_shape_model_base__with_coronary_and_papillary.par"
     params = resolve_par(param_file)
     pixel_width_cm = params["pixel_width"]
     slice_width_cm = params["slice_width"]
@@ -172,7 +174,7 @@ def main():
             spacing
         ))
 
-    with Pool(processes=20) as pool:
+    with Pool(processes=os.cpu_count() - 1) as pool:
         pool.starmap(generate_ssm_file, worker_args)
 
 if __name__ == "__main__":
