@@ -47,11 +47,11 @@ def deform_surface(
     labels = np.unique(moving_labels)
     labels = labels[labels != 0]
     new_cloud = pv.PolyData()
+    new_points_all, _ = torchcpd.RigidRegistration(X=target_surface.points, Y=source_surface.points, device=device).register()
     for label in labels:
-        source_points = source_surface.points[moving_labels == label]
+        source_points = new_points_all[moving_labels == label]
         target_points = target_surface.points[fix_labels == label]
-        new_points, _ = torchcpd.RigidRegistration(X=target_points, Y=source_points, device=device).register()
-        new_points, _ = torchcpd.AffineRegistration(X=target_points, Y=new_points.cpu().numpy(), device=device).register()
+        new_points, _ = torchcpd.AffineRegistration(X=target_points, Y=source_points.cpu().numpy(), device=device).register()
         new_points, _ = torchcpd.DeformableRegistration(X=target_points, Y=new_points.cpu().numpy(), device=device, kwargs=deform_kwargs).register()
         cloud = pv.PolyData(new_points.cpu().numpy())
         cloud.point_data["label"] = np.ones(cloud.n_points).astype(np.uint8) * label
@@ -154,7 +154,7 @@ def main(template_surface_path: Path | None = None):
                     mov_volume_point_cloud_file=volume_points_cloud_dir / case_files[phase].relative_to(vtk_dir),
                     vtk_dir=vtk_dir,
                     aligned_vtk_dir=aligned_vtk_dir,
-                    fix_volume_point_cloud=fix_volume_point_cloud_list[phase].copy(),
+                    fix_volume_point_cloud=fix_volume_point_cloud_list[0].copy(),
                     template_surface=template_surface.copy(),
                     gpu_id=gpu_id
                 ))
@@ -171,5 +171,5 @@ def main(template_surface_path: Path | None = None):
     print(f"Failed cases: {failed_cases}")
 
 if __name__ == "__main__":
-    main(template_surface_path=Path("/media/data3/sj/Data/Phatom/output_ssm_pca/ssm_template_avg.vtk"))
-    # main()
+    # main(template_surface_path=Path("/media/data3/sj/Data/Phatom/output_ssm_pca/ssm_template_avg.vtk"))
+    main()

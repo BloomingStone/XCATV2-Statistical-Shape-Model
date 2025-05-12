@@ -13,25 +13,27 @@ test_root_dir = Path("/media/data3/sj/Data/Phatom/test_ssm_image_ASOCA_144x144x1
 pca_root_dir = Path("/media/data3/sj/Data/Phatom/output_ssm_pca")
 
 # %%
+template_vtk_file = pca_root_dir / "ssm_template_avg.vtk"
+template_surface = pv.read(template_vtk_file)
+all_label = template_surface.point_data["label"]
+max_point_num = template_surface.points[all_label == 1].shape[0]
+
 label_dir = test_root_dir / "label"
 label_file = next(label_dir.glob("*.nii.gz"))
 
 vtk_output_dir = test_root_dir / "vtk"
 vtk_output_dir.mkdir(parents=True, exist_ok=True)
 
-vtk_cloud = get_cloud_from_nii_label(label_file)
+vtk_cloud = get_cloud_from_nii_label(label_file, max_point_num)
 
 # %%
-template_vtk_file = pca_root_dir / "ssm_template_avg.vtk"
-template_surface = pv.read(template_vtk_file)
+
 landmark_surface = deform_surface(
     source_surface=template_surface,
     target_surface=vtk_cloud,
     device="cuda:1",
-    alpha = 1e-5,
-    beta = 1e-5,
-    max_iterations = 5000,
-    tolerance = 1e-6,
+    max_iterations = 1e4,
+    tolerance = 1e-7,
 )
 landmark_surface.save(vtk_output_dir / "landmark.vtk")
 
@@ -233,6 +235,30 @@ def save_label_volume_as_nii(
     nib.save(new_label_image, str(output_file))
     print(f"Saved {output_file}")
 
+def save_label_volume_list_as_4d_nii(
+        label_volume_list: list[np.ndarray],
+        output_file: Path,
+        affine: np.ndarray,
+        direction = (-1, 1, 1),
+) -> None:
+    """
+    将标签体积列表保存为 4D NII 文件。
+    
+    Args:
+        label_volume_list: list[np.ndarray], 标签体积列表。
+        output_file: Path, 输出文件路径。
+        affine: np.ndarray | None, 仿射矩阵
+        direction: tuple[int, int, int], 中间步骤处理时的方向方向，默认为 (-1, 1, 1)。
+    """
+    direction_label = np.diag(affine[:3, :3])
+    for i in range(3):
+        if direction[i] * direction_label[i] < 0:
+            label_volume_list = [np.flip(label_volume, axis=i) for label_volume in label_volume_list]
+    
+    image_list = [nib.Nifti1Image(label_volume, affine=nib.load(label_file).affine) for label_volume in label_volume_list]
+    new_label_image = nib.concat_images(image_list)
+    nib.save(new_label_image, str(output_file))
+    print(f"Saved {output_file}")
 
 label_image = nib.load(label_file)
 ref_image = pv.ImageData(dimensions=label_image.shape)
@@ -257,6 +283,11 @@ landmark_label_volume = polydata_to_label_volumes(
 save_label_volume_as_nii(
     label_volume=landmark_label_volume,
     output_file=test_root_dir / "label_volumes/landmark.nii.gz",
+    affine=label_image.affine,
+)
+save_label_volume_list_as_4d_nii(
+    label_volume_list=label_volumes,
+    output_file=test_root_dir / "label_volumes/4d.nii.gz",
     affine=label_image.affine,
 )
 

@@ -39,6 +39,7 @@ def process_label_file(label_nii_path: Path, vtk_dir: Path):
         label_ids = sorted(np.unique(label_data).astype(np.int8))[1:]
         volume_points_all = pv.PolyData()
         
+        # TODO 使用volume时只是为了方便整体对齐，其实并不需要区分label
         for label_id in label_ids:
             assert label_id > 0
             points = np.argwhere(label_data == label_id)
