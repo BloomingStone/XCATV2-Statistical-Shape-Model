@@ -14,3 +14,6 @@ male_pt108, male_pt118, male_pt128, male_pt141, male_pt146, male_pt154, male_pt1
 
 这可能是因为我是用female 作为模板，导致有较大差异，无法通过弹性配准对齐
 
+TODO 这是因为图像边缘被裁切到了
+
+![alt text](image.png)

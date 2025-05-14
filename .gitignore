@@ -14,6 +14,8 @@
 *.vtk
 *.log
 *.npy
+*.gif
+*.png
 
 
 dxcat2
