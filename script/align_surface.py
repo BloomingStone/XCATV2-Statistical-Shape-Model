@@ -118,6 +118,7 @@ def main(template_surface_path: Path | None = None):
 
     fix_case_name = sorted(surface_vtk_files.keys())[0]
     fix_case_files = surface_vtk_files[fix_case_name].copy()
+    n_phases = len(fix_case_files)
     del surface_vtk_files[fix_case_name]
     print(f'fixed case: {fix_case_name}')
 
@@ -129,7 +130,7 @@ def main(template_surface_path: Path | None = None):
 
     # Prepare fixed data for all phases first
     fix_volume_point_cloud_list = []
-    for phase in range(10):
+    for phase in range(n_phases):
         fix_vtk_file = fix_case_files[phase]
         fix_surface = pv.read(fix_vtk_file)
         new_fix_vtk_file = aligned_vtk_dir / fix_vtk_file.relative_to(vtk_dir)
@@ -145,7 +146,7 @@ def main(template_surface_path: Path | None = None):
     pool = multiprocessing.Pool(processes=num_gpus)
 
     with multiprocessing.Pool(processes=num_gpus) as pool:
-        for phase in tqdm(range(10), desc="Processing phases"):
+        for phase in tqdm(range(n_phases), desc="Processing phases"):
             task_args = []
             for index, case_files in enumerate(surface_vtk_files.values()):
                 gpu_id = index % num_gpus  # Distribute cases evenly across GPUs

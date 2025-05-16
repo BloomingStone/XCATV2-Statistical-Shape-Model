@@ -24,7 +24,7 @@ label_file = next(label_dir.glob("*.nii.gz"))
 vtk_output_dir = test_root_dir / "vtk"
 vtk_output_dir.mkdir(parents=True, exist_ok=True)
 
-vtk_cloud = get_cloud_from_nii_label(label_file, max_point_num)
+vtk_cloud = get_cloud_from_nii_label(label_file, max_point_num=500)
 
 # %%
 
