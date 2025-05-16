@@ -4,12 +4,22 @@ import re
 from tempfile import TemporaryDirectory
 from multiprocessing import Pool
 from datetime import datetime
+import argparse
+import logging
+import os
 
 import numpy as np
 import nibabel as nib
 
 from resolve_par import resolve_par
 
+
+logging.basicConfig(
+    filename='processing_errors.log',
+    level=logging.ERROR,
+    format='%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s',
+    encoding='utf-8'
+)
 
 def read_numpy_from_bin(raw_bin_file: Path, output_shape: tuple[int, int, int], *, is_label: bool) -> np.ndarray:
     with open(raw_bin_file, "rb") as f:
@@ -74,7 +84,8 @@ def generate_ssm_file(
         out_frames: int, 
         array_size: int,
         depth: int,
-        spacing: tuple[int, int, int]
+        spacing: tuple[int, int, int],
+        include_vessels: bool
 ) -> None:
     print(f"{nrb_file.stem} start")
     (nii_image_dir := output_nii_dir / "image").mkdir(parents=True, exist_ok=True)
@@ -91,8 +102,19 @@ def generate_ssm_file(
             "--startslice", str(start_slice),
             "--endslice", str(end_slice),
             "--out_frames",  str(out_frames),
-            str(raw_dir/output_prefix),
         ]
+
+        if include_vessels:
+            args = args + [
+                "--vessel_flag", "1",
+                "--coronary_art_flag",  "1",
+                "--coronary_vein_flag", "1",
+                "--papillary_flag", "1",
+                "--coronary_art_activity", "6",
+                "--coronary_vein_activity", "7"
+            ]
+        
+        args.append(str(raw_dir/output_prefix))
         
         subprocess.run(args, cwd=str(xcat_dir), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for i in range(out_frames):
@@ -112,9 +134,15 @@ def generate_ssm_file(
     print(f"{nrb_file.stem} done")
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out_frames", type=int, default=10)
+    parser.add_argument("--include_vessels", action="store_true")
+    parser.add_argument("--output_nii_name", type=str, default="output_ssm_nii")
+    args = parser.parse_args()
+
     phantom_root_dir = Path.cwd().resolve()
     xcat_dir = phantom_root_dir / "XCAT"
-    output_nii_root_dir = phantom_root_dir / "output_ssm_nii"
+    output_nii_root_dir = phantom_root_dir / args.output_nii_name
     source_nrb_dir = phantom_root_dir / "xcat_adult_nrb_files"
     (temp_dir := phantom_root_dir / "temp").mkdir(exist_ok=True)
 
@@ -134,7 +162,9 @@ def main():
         "female": int(148 / slice_width_cm)
     }
     depth_dict = {gender: int(end_slice_dict[gender] - start_slice_dict[gender] + 1) for gender in ["male", "female"]}
-    out_frames = 10
+    
+    out_frames = args.out_frames
+    include_vessels = args.include_vessels
     pixel_width_mm = pixel_width_cm * 10
     slice_width_mm = slice_width_cm * 10
     spacing = (-pixel_width_mm, pixel_width_mm, slice_width_mm)
@@ -169,10 +199,11 @@ def main():
             out_frames,
             array_size,
             depth,
-            spacing
+            spacing,
+            include_vessels
         ))
 
-    with Pool(processes=20) as pool:
+    with Pool(processes=(os.cpu_count()//2)) as pool:
         pool.starmap(generate_ssm_file, worker_args)
 
 if __name__ == "__main__":

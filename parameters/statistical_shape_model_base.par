@@ -214,7 +214,7 @@ vol_epidy = 0.0		# set the volume of the epididymus; (0 = do not change)
 
 pixel_width = 0.1	# pixel width (cm);  see NOTE 7 
 slice_width = 0.1	# slice width (cm);   
-array_size = 200	# array size   
+array_size = 250	# array size   
 subvoxel_index = 1	# subvoxel_index (=1,2,3,4 -> 1,8,27,64 subvoxels/voxel, respectively) 
 startslice = 1275	# start_slice;  
 endslice = 1405		# end_slice;  
