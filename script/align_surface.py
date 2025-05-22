@@ -21,21 +21,33 @@ def align_surface_rigid(
         moving_surface: pv.PolyData, 
         moving_point_cloud: pv.PolyData, 
         fixed_point_cloud: pv.PolyData,
-        device: str = 'cuda:0'
+        device: str = 'cuda:0',
+        max_align_points_num: int = 1000
     ) -> pv.PolyData:
     """Align two surfaces using rigid transformation"""
     source_points = moving_point_cloud.points
     target_points = fixed_point_cloud.points
+    source_index = np.random.choice(source_points.shape[0], max_align_points_num, replace=False)
+    source_points = source_points[source_index]
+    target_index = np.random.choice(target_points.shape[0], max_align_points_num, replace=False)
+    target_points = target_points[target_index]
     res = moving_surface.copy()
-    reg = torchcpd.RigidRegistration(X=target_points[::10], Y=source_points[::10], device=device, scale=False)
-    _, (s, R, t) = reg.register()
+    reg = torchcpd.RigidRegistration(X=target_points, Y=source_points, device=device, dtype=torch.float64)  # 如果设置 scale=False（即不进行缩放的纯刚体变换）会出现很多的NaN，原因暂时不明
+    new_volume_points, (s, R, t) = reg.register()
     # handel nan in translation:
-    if torch.isnan(t).any():
-        raise ValueError(f"NaN in translation")
+    if  torch.isnan(s).any() or torch.isnan(R).any() or torch.isnan(t).any():
+        raise ValueError(f"NaN in rigid registration")
+    new_points = reg.transform_point_cloud(torch.tensor(moving_surface.points, device=device, dtype=torch.float64))
+    
+    reg = torchcpd.AffineRegistration(X=target_points, Y=new_volume_points.cpu().numpy(), device=device, dtype=torch.float64)
+    _, (B, t) = reg.register()
+    if torch.isnan(B).any() or torch.isnan(t).any():
+        raise ValueError(f"NaN in affine registration")
+    res.points = reg.transform_point_cloud(new_points).cpu().numpy()
 
-    res.points = reg.transform_point_cloud(torch.tensor(moving_surface.points, device=device, dtype=torch.float64)).cpu().numpy()
     return res
 
+# TODO 使用该方法获得表面标记点时会出现形变结果无法完全和目标一样的问题
 def deform_surface(
         source_surface: pv.PolyData, 
         target_surface: pv.PolyData, 
@@ -48,6 +60,7 @@ def deform_surface(
     labels = labels[labels != 0]
     new_cloud = pv.PolyData()
     new_points_all, _ = torchcpd.RigidRegistration(X=target_surface.points, Y=source_surface.points, device=device).register()
+    new_points_all, _ = torchcpd.AffineRegistration(X=target_surface.points, Y=new_points_all.cpu().numpy(), device=device).register()
     for label in labels:
         source_points = new_points_all[moving_labels == label]
         target_points = target_surface.points[fix_labels == label]

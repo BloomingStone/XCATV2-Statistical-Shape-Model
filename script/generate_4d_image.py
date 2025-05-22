@@ -130,6 +130,7 @@ for phase in range(b_motion_mean_per_phase.shape[1]):
         b_motion_mean_per_phase=b_motion_mean_per_phase,
         zooming_rate=zooming_rate,
         phase=phase,
+        num_components_used=2
     )
     polydata_list.append(motion_surface)
 

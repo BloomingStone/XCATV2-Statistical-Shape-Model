@@ -46,6 +46,8 @@ def load_vtk_points(base_folder: Path) -> np.ndarray:
             num_phases = num_phases_inner
         elif num_phases != num_phases_inner:
             print(f"Error: Inconsistent number of phases in {patient_dir}")
+            for label in all_labels:
+                del data[label][patient_dir.name]
             return False
 
         return True
@@ -215,7 +217,7 @@ def visualize_motion_deformation(
     point_cloud["label"] = full_labels
 
     # Add the mesh
-    plotter.add_mesh(point_cloud, scalars="label", render_points_as_spheres=True, point_size=5.0)
+    plotter.add_mesh(point_cloud, scalars="label", render_points_as_spheres=True, point_size=5.0, show_scalar_bar=False)
 
     # Animate deformation per phase
     for phase_id in range(num_phases):
@@ -289,7 +291,7 @@ def main():
     print(f"Saved PCA results to {output_folder}")
     
     # Visualize motion deformation
-    for num_components_used in [1, 3, 5, 7]:
+    for num_components_used in [1, 2, 3, 4, 5, 6, 7]:
         visualize_motion_deformation(
             P_motion=P_motion,
             b_motion_mean_per_phase=b_motion_mean_per_phase,

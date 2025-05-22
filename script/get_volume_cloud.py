@@ -27,7 +27,7 @@ logging.basicConfig(
 
 def process_label_file(label_nii_path: Path, vtk_dir: Path):
     """处理单个label文件并保存VTK结果"""
-    max_point_num = 10000
+    max_point_num = 1000
     try:
         ssm_case_name = label_nii_path.parent.parent.name
         label_name = label_nii_path.stem.split(".")[0]
@@ -43,8 +43,8 @@ def process_label_file(label_nii_path: Path, vtk_dir: Path):
         for label_id in label_ids:
             assert label_id > 0
             points = np.argwhere(label_data == label_id)
-            stride = max(1, len(points) // max_point_num)
-            points = points[::stride]
+            index = np.random.choice(points.shape[0], max_point_num, replace=False)
+            points = points[index]
             volume_points = pv.PolyData(points)
             volume_points.point_data["label"] = np.ones(volume_points.n_points).astype(np.uint8) * label_id
             volume_points_all = volume_points_all.merge(volume_points)

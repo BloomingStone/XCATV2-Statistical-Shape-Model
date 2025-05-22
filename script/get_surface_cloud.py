@@ -28,7 +28,7 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
-# TODO 可能需要更好地处理这里的direction
+# TODO 可能需要更好地处理这里的direction, 比如使用affine获得在世界坐标系下的表面surface
 # TODO 可能需要进行缩放
 def get_cloud_from_nii_label(label_nii_path: Path, max_point_num, direction = (-1, 1, 1)):
     """从NII文件中提取点云"""
@@ -71,7 +71,7 @@ def get_cloud_from_nii_label(label_nii_path: Path, max_point_num, direction = (-
         surface_all = surface_all.merge(surface)
     return surface_all
 
-def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 2000):
+def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num):
     """处理单个label文件并保存VTK结果"""
     try:
         ssm_case_name = label_nii_path.parent.parent.name
@@ -88,7 +88,7 @@ def process_label_file(label_nii_path: Path, vtk_dir: Path, max_point_num = 2000
         print(f"ERROR: {error_msg} - see processing_errors.log for details")
         return False
 
-def main_multi_process(ssm_nii_dir: Path, vtk_dir: Path, max_point_num = 2000):
+def main_multi_process(ssm_nii_dir: Path, vtk_dir: Path, max_point_num):
     # 收集所有需要处理的label文件路径
     label_files = []
     for ssm_case in ssm_nii_dir.iterdir():
@@ -133,5 +133,5 @@ def main_single_process(ssm_nii_dir: Path, vtk_dir: Path):
 if __name__ == "__main__":
     ssm_nii_dir = Path.cwd() / "output_ssm_nii"
     vtk_dir = Path.cwd() / "output_ssm_vtk"
-    main_multi_process(ssm_nii_dir=ssm_nii_dir, vtk_dir=vtk_dir, max_point_num=200)
+    main_multi_process(ssm_nii_dir=ssm_nii_dir, vtk_dir=vtk_dir, max_point_num=500)
     # main_single_process(ssm_nii_dir=ssm_nii_dir, vtk_dir=vtk_dir)
