@@ -170,6 +170,11 @@ def calculate_motion_pca(ssm_points: np.ndarray, s_mean_patients: np.ndarray, N_
     P_motion_list = []
     b_motion_list = []
     lambda_list = []
+    # 注：此处必须同时对多个相位的数据进行PCA，如此才能提取整个心动周期的运动趋势（运动主成分）。
+    # 特征点（landmark）在整个行动周期的运动方向都是相同的————即P_motion中指定label, 主成分
+    # 和特征点后所得的向量就是主要运动方法：v = P[i, j, k] = (x, y, z)
+    # 如果对每个label、每个相位都计算PCA, 则不同患者的的位置差异性会掩盖运动趋势
+    # 但这也存在问题，即每个特征点运动方向相同，可能导致运动较为僵硬
     for s_motion_i in s_motion:
         pca = PCA(n_components=N_m)
         pca.fit(s_motion_i.astype(np.float64))
