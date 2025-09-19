@@ -11,8 +11,6 @@ import os
 import numpy as np
 import nibabel as nib
 
-from resolve_par import resolve_par
-
 
 logging.basicConfig(
     filename='processing_errors.log',
@@ -20,6 +18,31 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s',
     encoding='utf-8'
 )
+
+
+def resolve_par(param_path: Path) -> dict[str, int|float|str]:
+    params = {}
+    with open(param_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line == '' or line.startswith('#'):
+                continue
+            key, value = line.split('=')[:2]
+            key = key.strip()
+            value = value.split('#')[0].strip()
+            
+            if '.' in value:
+                try:
+                    params[key] = float(value)
+                except ValueError:
+                    params[key] = value
+            elif value.isdigit():
+                params[key] = int(value)
+            else:
+                params[key] = value
+
+    return params
+
 
 def read_numpy_from_bin(raw_bin_file: Path, output_shape: tuple[int, int, int], *, is_label: bool) -> np.ndarray:
     with open(raw_bin_file, "rb") as f:

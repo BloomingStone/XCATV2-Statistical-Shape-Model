@@ -4,8 +4,8 @@ import pyvista as pv
 import numpy as np
 from scipy.ndimage import binary_fill_holes, binary_closing, generate_binary_structure
 import nibabel as nib
-from get_surface_cloud import get_cloud_from_nii_label
-from align_surface import deform_surface
+from _02_get_surface_cloud import get_cloud_from_nii_label
+from _04_align_surface import deform_surface
 
 pv.set_jupyter_backend("html")
 

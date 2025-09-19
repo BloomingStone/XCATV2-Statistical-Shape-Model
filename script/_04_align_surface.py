@@ -33,17 +33,13 @@ def align_surface_rigid(
     target_points = target_points[target_index]
     res = moving_surface.copy()
     reg = torchcpd.RigidRegistration(X=target_points, Y=source_points, device=device, dtype=torch.float64)  # 如果设置 scale=False（即不进行缩放的纯刚体变换）会出现很多的NaN，原因暂时不明
-    new_volume_points, (s, R, t) = reg.register()
+    _, (s, R, t) = reg.register()
     # handel nan in translation:
     if  torch.isnan(s).any() or torch.isnan(R).any() or torch.isnan(t).any():
         raise ValueError(f"NaN in rigid registration")
+    reg.s = torch.ones_like(reg.s)
     new_points = reg.transform_point_cloud(torch.tensor(moving_surface.points, device=device, dtype=torch.float64))
-    
-    reg = torchcpd.AffineRegistration(X=target_points, Y=new_volume_points.cpu().numpy(), device=device, dtype=torch.float64)
-    _, (B, t) = reg.register()
-    if torch.isnan(B).any() or torch.isnan(t).any():
-        raise ValueError(f"NaN in affine registration")
-    res.points = reg.transform_point_cloud(new_points).cpu().numpy()
+    res.points = new_points.cpu().numpy()
 
     return res
 
@@ -89,7 +85,7 @@ def process_case(args: ProcessCaseArgs) -> Path | None:
     """
     Align surface and deform surface to template surface
     step 1: align surface by the transformation of the volume point cloud (moving volume point cloud -> fixed volume point cloud)
-    step 2: deform template surface to the aligned surface for generate
+    step 2: deform template surface to the aligned surface
     """
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
     device = 'cuda'
@@ -129,30 +125,21 @@ def main(template_surface_path: Path | None = None):
         case_dir.name: sorted(case_dir.glob("*.vtk")) for case_dir in vtk_dir.iterdir() if case_dir.is_dir()
     }
 
+    # 旋转某一例中的第一个作为 fix image 与 模板。其他点云（A）首先进行刚性配准对齐，然后将模版可形变配准到A, 从而得到点对应模板
     fix_case_name = sorted(surface_vtk_files.keys())[0]
     fix_case_files = surface_vtk_files[fix_case_name].copy()
     n_phases = len(fix_case_files)
+    fix_case_file = fix_case_files[0]
     del surface_vtk_files[fix_case_name]
-    print(f'fixed case: {fix_case_name}')
+    print(f'fixed case (also is template): {fix_case_name}')
 
     if template_surface_path is None:
-        template_surface = pv.read(fix_case_files[0])
+        template_surface = pv.read(fix_case_file)
         template_surface.save('ssm_template.vtk')
     else:
         template_surface = pv.read(template_surface_path)
-
-    # Prepare fixed data for all phases first
-    fix_volume_point_cloud_list = []
-    for phase in range(n_phases):
-        fix_vtk_file = fix_case_files[phase]
-        fix_surface = pv.read(fix_vtk_file)
-        new_fix_vtk_file = aligned_vtk_dir / fix_vtk_file.relative_to(vtk_dir)
-        new_fix_vtk_file.parent.mkdir(parents=True, exist_ok=True)
-        fix_surface.save(new_fix_vtk_file)
-
-        fix_volume_point_cloud = pv.read(volume_points_cloud_dir / fix_vtk_file.relative_to(vtk_dir))
-        fix_volume_point_cloud_list.append(fix_volume_point_cloud)
     
+    fix_volume_point_could = pv.read(volume_points_cloud_dir / fix_case_file.relative_to(vtk_dir))
 
     failed_cases = []
     num_gpus = 4
@@ -165,10 +152,10 @@ def main(template_surface_path: Path | None = None):
                 gpu_id = index % num_gpus  # Distribute cases evenly across GPUs
                 task_args.append(ProcessCaseArgs(
                     mov_vtk_file=case_files[phase],
-                    mov_volume_point_cloud_file=volume_points_cloud_dir / case_files[phase].relative_to(vtk_dir),
                     vtk_dir=vtk_dir,
                     aligned_vtk_dir=aligned_vtk_dir,
-                    fix_volume_point_cloud=fix_volume_point_cloud_list[0].copy(),
+                    mov_volume_point_cloud_file=volume_points_cloud_dir / case_files[phase].relative_to(vtk_dir),
+                    fix_volume_point_cloud=fix_volume_point_could,
                     template_surface=template_surface.copy(),
                     gpu_id=gpu_id
                 ))
