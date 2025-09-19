@@ -20,3 +20,6 @@
 
 dxcat2
 dxcat2_linux_64bit
+# pixi environments
+.pixi/*
+!.pixi/config.toml
