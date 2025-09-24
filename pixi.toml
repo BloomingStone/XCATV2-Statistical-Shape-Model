@@ -1,26 +1,27 @@
 [workspace]
 authors = ["shi_jie <1592277253@qq.com>"]
-channels = [
-    "nvidia",
-    "ccpi",
-    "conda-forge",
-    "pytorch",
-]
+channels = ["conda-forge"]
 name = "Phatom"
 platforms = ["linux-64"]
 version = "0.1.0"
+
+[system-requirements]
+cuda = "12.0"
 
 [pypi-options]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 
 
 [tasks]
+generate-ssm-data = "python main.py generate-ssm-data"
+get-surface-cloud = "python main.py get-surface-cloud"
+get-volume-cloud = "python main.py get-volume-cloud"
+align-surface = "python main.py align-surface"
+calculate-ssm = "python main.py calculate-ssm"
 
 [dependencies]
-cuda-runtime = "12.4.*"
+pytorch-gpu = "*"
 numpy = ">=2.3.2,<3"
-pytorch = { version = "2.5.1.*", channel = "pytorch" }
-pytorch-cuda = { version = "12.4.*", channel = "pytorch" }
 nibabel = ">=5.3.2,<6"
 scipy = ">=1.16.1,<2"
 matplotlib = ">=3.10.5,<4"
@@ -28,7 +29,8 @@ pyvista = ">=0.46.3,<0.47"
 tqdm = ">=4.67.1,<5"
 scikit-learn = ">=1.7.2,<2"
 einops = ">=0.8.1,<0.9"
+typer = ">=0.19.2,<0.20"
 
 [pypi-dependencies]
-torchcpd = {git = "https://github.com/BloomingStone/CPD-Pytorch.git", rev = "28ad5b70390ebee6caf5162d1acff70d2cacb66c"}
+torchcpd = { git = "https://github.com/BloomingStone/CPD-Pytorch.git", rev = "28ad5b70390ebee6caf5162d1acff70d2cacb66c" }
 pyacvd = ">=0.3.2, <0.4"

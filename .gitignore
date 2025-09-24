@@ -2,6 +2,8 @@
 /Roby/
 /output_nii/
 /output_raw/
+/data/
+/data_/
 /.vscode/
 **/__pycache__/
 **/*.py[cod]
@@ -23,3 +25,6 @@ dxcat2_linux_64bit
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+xcat_adult_nrb_files/*
+!xcat_adult_nrb_files/.gitkeep

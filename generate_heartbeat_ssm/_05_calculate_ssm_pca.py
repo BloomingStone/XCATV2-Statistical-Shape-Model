@@ -1,9 +1,17 @@
 from pathlib import Path
 from collections import defaultdict
+from typing import Annotated
+
+
 import pyvista as pv
 import numpy as np
 from sklearn.decomposition import PCA
 import einops
+import typer
+
+from . import project_root
+from .entrypoint import app
+
 
 def load_vtk_points(base_folder: Path) -> np.ndarray:
     """
@@ -118,7 +126,7 @@ def calculate_anatomy_pca(s_mean_patients: np.ndarray, s_mean_global: np.ndarray
     Args:
         s_mean_points (np.ndarray): The mean points array, shape = (num_labels(L), num_patients(N_i), num_points(M), 3).
         s_mean_global (np.ndarray): The mean global points array, shape = (num_labels(L), num_points(M), 3).
-        N_a (int, optional): Number of anatomy components. Defaults to 7.
+        N_a (int, optional): Number of anatomy components. Defaults to 7. And the final components will be min(N_i, N_a) where N_i is number of samples and N_a is number of featrues
     Returns:
         Principal component direction, shape = (num_labels(L), num_components(N_a), num_points(M), 3)
         Principal component weights, shape = (num_labels(L), num_patients(N_i), num_components(N_a))
@@ -127,8 +135,11 @@ def calculate_anatomy_pca(s_mean_patients: np.ndarray, s_mean_global: np.ndarray
     assert s_mean_patients.ndim == 4, f"s_mean_points.ndim is {s_mean_patients.ndim}, expected 4"
     assert s_mean_global.ndim == 3, f"s_mean_global.ndim is {s_mean_global.ndim}, expected 3"
     
+    
     L, N_i, M, D = s_mean_patients.shape
     L_, M_, D_ = s_mean_global.shape
+    
+    N_a = min(N_a, N_i)
     assert L == L_ and M == M_ and D == D_, f"shape mismatch: {s_mean_patients.shape} vs {s_mean_global.shape}"
     s_anatomy = s_mean_patients - s_mean_global[:, np.newaxis, :, :]
     s_anatomy = einops.rearrange(s_anatomy, "L N_i M D -> L N_i (M D)")
@@ -247,18 +258,39 @@ def visualize_motion_deformation(
     plotter.close()
     print(f"Saved motion animation to {output_path / gif_name}")
 
-def main():
-    base_folder = Path("/media/data3/sj/Data/Phatom/output_ssm_vtk_aligned")
-    output_folder = Path("/media/data3/sj/Data/Phatom/output_ssm_pca")
-    template_surface = Path("/media/data3/sj/Data/Phatom/ssm_template.vtk")
-    output_folder.mkdir(parents=True, exist_ok=True)
+@app.command()
+def calculate_ssm(
+    aligned_vtk_dir: Annotated[
+        Path, typer.Argument(help="The directory containing the aligned VTK files.")
+    ] = project_root / "data" / "output_ssm_vtk_aligned",
+    output_dir: Annotated[
+        Path, typer.Argument(help="The output directory for the Statistical Shape Model (SSM) results.")
+    ] = project_root / "data" / "output_ssm_pca",
+    template_surface: Annotated[
+        Path, typer.Option(help="The template surface for the SSM, used to generate the new average surface template")
+    ] = project_root / "ssm_template.vtk",
+    visualize: Annotated[
+        bool, typer.Option(help="Whether to visualize the motion deformation.")
+    ] = False,
+):
+    """
+    Calculate the Statistical Shape Model (SSM) for the aligned VTK files. [STEP 2]
+    1) Calculate the mean points per patient, per phase, and globally.
+    2) Calculate the anatomy PCA and motion PCA.
+    """
+    assert aligned_vtk_dir.is_dir(), f"{aligned_vtk_dir} is not a directory"
+    assert template_surface.is_file(), f"{template_surface} is not a file"
+    assert template_surface.suffix == ".vtk", f"{template_surface} is not a VTK file"
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    data = load_vtk_points(base_folder)
+    data = load_vtk_points(aligned_vtk_dir)
 
     s_mean_patients = calculate_mean_points_per_patient(data)   # shape = (L, N_i, M, 3)
     s_mean_phases = calculate_mean_points_per_phase(data)   # shape = (L, N_j, M, 3)
     s_mean_global = calculate_mean_points(data)   # shape = (L, M, 3)
 
+    # save s_mean as a new ssm_template
     mesh = pv.PolyData()
     for label_id in range(s_mean_global.shape[0]):
         points = s_mean_global[label_id]
@@ -267,12 +299,12 @@ def main():
         mesh = mesh.merge(label)
     template_surface = pv.read(template_surface)
     template_surface.points = mesh.points
-    template_surface.save(output_folder / "ssm_template_avg.vtk")
+    template_surface.save(output_dir / "ssm_template_avg.vtk")
 
     for phase_id in range(s_mean_phases.shape[1]):
         template_surface = template_surface.copy()
         template_surface.points = s_mean_phases[:, phase_id].reshape(-1, 3)
-        p = output_folder / "avg_phases" / f"ssm_template_phase_{phase_id:03d}.vtk"
+        p = output_dir / "avg_phases" / f"ssm_template_phase_{phase_id:03d}.vtk"
         p.parent.mkdir(parents=True, exist_ok=True)
         template_surface.save(p)
 
@@ -284,28 +316,29 @@ def main():
     b_motion_mean_per_phase = np.mean(b_motion, axis=1)     # shape = (L, N_j, N_m)
     print(f"{P_anatomy.shape=}\n{b_anatomy.shape=}\n{lambda_anatomy.shape=}")
     print(f"{P_motion.shape=}\n{b_motion.shape=}\n{b_motion_mean_per_phase.shape=}\n{lambda_motion.shape=}")
-    np.save(output_folder / "P_anatomy.npy", P_anatomy)
-    np.save(output_folder / "b_anatomy.npy", b_anatomy)
-    np.save(output_folder / "lambda_anatomy.npy", lambda_anatomy)
-    np.save(output_folder / "P_motion.npy", P_motion)
-    np.save(output_folder / "b_motion.npy", b_motion)
-    np.save(output_folder / "b_motion_mean_per_phase.npy", b_motion_mean_per_phase)
-    np.save(output_folder / "lambda_motion.npy", lambda_motion)
-    np.save(output_folder / "s_mean_patients.npy", s_mean_patients)
-    np.save(output_folder / "s_mean_global.npy", s_mean_global)
-    print(f"Saved PCA results to {output_folder}")
+    np.save(output_dir / "P_anatomy.npy", P_anatomy)
+    np.save(output_dir / "b_anatomy.npy", b_anatomy)
+    np.save(output_dir / "lambda_anatomy.npy", lambda_anatomy)
+    np.save(output_dir / "P_motion.npy", P_motion)
+    np.save(output_dir / "b_motion.npy", b_motion)
+    np.save(output_dir / "b_motion_mean_per_phase.npy", b_motion_mean_per_phase)
+    np.save(output_dir / "lambda_motion.npy", lambda_motion)
+    np.save(output_dir / "s_mean_patients.npy", s_mean_patients)
+    np.save(output_dir / "s_mean_global.npy", s_mean_global)
+    print(f"Saved PCA results to {output_dir}")
     
     # Visualize motion deformation
-    for num_components_used in [1, 2, 3, 4, 5, 6, 7]:
-        visualize_motion_deformation(
-            P_motion=P_motion,
-            b_motion_mean_per_phase=b_motion_mean_per_phase,
-            s_mean_global=s_mean_global,
-            output_path=output_folder,
-            num_components_used=num_components_used,
-            gif_name=f"motion_deformation_{num_components_used}.gif"
-        )
+    if visualize:
+        for num_components_used in [1, 2, 3, 4, 5, 6, 7]:
+            visualize_motion_deformation(
+                P_motion=P_motion,
+                b_motion_mean_per_phase=b_motion_mean_per_phase,
+                s_mean_global=s_mean_global,
+                output_path=output_dir,
+                num_components_used=num_components_used,
+                gif_name=f"motion_deformation_{num_components_used}.gif"
+            )
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(calculate_ssm)

@@ -18,8 +18,6 @@ PosixPath('/media/data3/sj/Data/Phatom/output_ssm_vtk/male_pt141/ssm_001.vtk'), 
 
 TODO 这是因为图像边缘被裁切到了
 
-![alt text](image.png)
-
 后面尝试增加fps到20
 
 生成nii图像时 female 142 失败
